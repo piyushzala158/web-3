@@ -7,9 +7,6 @@ const page = async () => {
   const session = await auth();
   console.log("session: ", session);
 
-  if (session?.user) return redirect("/");
-  
-
   return (
     <div>
       <SignIn />

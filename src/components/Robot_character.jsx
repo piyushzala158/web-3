@@ -1,7 +1,8 @@
 import React, { useRef, useEffect, useState } from "react";
-import { useFrame, } from "@react-three/fiber";
+import { useFrame } from "@react-three/fiber";
 import { useAnimations, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
+import { useSession } from "next-auth/react";
 
 export default function AnimatedCharacter({ ...props }) {
   const group = useRef();
@@ -164,36 +165,76 @@ useGLTF.preload("/newmodel2.glb");
 
 // Room Detection Component
 function RoomDetector({ modelRef, setEnteredRoom }) {
-  // Define rooms
+  const { data: session } = useSession();
+
+  const [currentSong, setCurrentSong] = useState(null);
+  const [error, setError] = useState(null);
+  const audioRef = useRef(null);
+
+  // Define rooms with associated playlist track indices
   const rooms = [
     {
       id: "room-top-left",
       position: [-10, 0, -10],
       size: [10, 10, 10],
+      trackIndex: 0, // First song in the playlist
     },
     {
       id: "room-top-right",
       position: [10, 0, -10],
       size: [10, 10, 10],
+      trackIndex: 1, // Second song in the playlist
     },
     {
       id: "room-bottom-left",
       position: [-10, 0, 10],
       size: [10, 10, 10],
+      trackIndex: 2, // Third song in the playlist
     },
     {
       id: "room-bottom-right",
       position: [10, 0, 10],
       size: [10, 10, 10],
+      trackIndex: 3, // Fourth song in the playlist
     },
   ];
 
+  // Track the last entered room to prevent repeating song
+  const lastEnteredRoomRef = useRef(null);
+
   useEffect(() => {
-    const checkRoomDetection = () => {
+    const fetchPlaylistSongs = async () => {
+      if (!session) return;
+
+      try {
+        const response = await fetch(
+          "https://api.spotify.com/v1/playlists/3cEYpjA9oz9GiPac4AsH4n",
+          {
+            headers: {
+              Authorization: `Bearer ${session?.token?.access_token}`,
+            },
+          }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          return data.tracks.items;
+        } else {
+          setError("Unable to fetch playlist tracks");
+          return [];
+        }
+      } catch (err) {
+        setError("An error occurred while fetching playlist tracks");
+        return [];
+      }
+    };
+
+    const checkRoomDetection = async () => {
       if (modelRef.current) {
         const modelBox = new THREE.Box3().setFromObject(modelRef.current);
-
         const modelCenter = modelBox.getCenter(new THREE.Vector3());
+
+        const playlistTracks = await fetchPlaylistSongs();
 
         rooms.forEach((room) => {
           const roomBox = new THREE.Box3().setFromCenterAndSize(
@@ -202,7 +243,25 @@ function RoomDetector({ modelRef, setEnteredRoom }) {
           );
 
           if (roomBox.containsPoint(modelCenter)) {
-            setEnteredRoom(room.id);
+            // Only change song if room is different from last entered
+            if (lastEnteredRoomRef?.current !== room?.id) {
+              const track = playlistTracks[room.trackIndex]?.track;
+
+              // Stop previous song
+              if (audioRef.current) {
+                audioRef.current.pause();
+              }
+
+              // Play new song preview
+              if (track?.preview_url) {
+                const audio = new Audio(track.preview_url);
+                audio.play();
+                audioRef.current = audio;
+              }
+
+              setEnteredRoom(room.id);
+              lastEnteredRoomRef.current = room.id;
+            }
           }
         });
       }
@@ -211,8 +270,14 @@ function RoomDetector({ modelRef, setEnteredRoom }) {
 
     const animationFrameId = requestAnimationFrame(checkRoomDetection);
 
-    return () => cancelAnimationFrame(animationFrameId);
-  }, [modelRef]);
+    return () => {
+      cancelAnimationFrame(animationFrameId);
+      // Clean up audio if component unmounts
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+    };
+  }, [modelRef, session]);
 
   // Render room boundaries
   return rooms.map((room) => (

@@ -5,7 +5,8 @@ export default function SignIn() {
     <form
       action={async () => {
         "use server";
-        await signIn("spotify");
+        const data = await signIn("spotify");
+        console.log("data: ", data);  
       }}
     >
       <button type="submit">Signin with Sporify</button>
