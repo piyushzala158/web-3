@@ -208,7 +208,7 @@ function RoomDetector({ modelRef, setEnteredRoom }) {
 
       try {
         const response = await fetch(
-          "https://api.spotify.com/v1/playlists/3cEYpjA9oz9GiPac4AsH4n",
+          "https://api.spotify.com/v1/artists/0TnOYISbd1XYRBk9myaseg",
           {
             headers: {
               Authorization: `Bearer ${session?.token?.access_token}`,
@@ -245,7 +245,9 @@ function RoomDetector({ modelRef, setEnteredRoom }) {
           if (roomBox.containsPoint(modelCenter)) {
             // Only change song if room is different from last entered
             if (lastEnteredRoomRef?.current !== room?.id) {
-              const track = playlistTracks[room.trackIndex]?.track;
+              const track = playlistTracks[room?.trackIndex]?.track;
+              console.log("playlistTracks: ", playlistTracks);
+              console.log("track: ", track);
 
               // Stop previous song
               if (audioRef.current) {
